@@ -101,6 +101,8 @@ SELECT * FROM managed_table;
 
 USE ${da.schema_name}_custom_location;
 
+SET spark.databricks.delta.commitValidation.enabled = false;
+
 CREATE OR REPLACE TABLE managed_table (width INT, length INT, height INT);
 INSERT INTO managed_table 
 VALUES (3, 2, 1);
@@ -131,8 +133,7 @@ DESCRIBE DETAIL managed_table;
 -- COMMAND ----------
 
 -- MAGIC %python 
--- MAGIC table_name = "managed_table_in_db_with_default_location"
--- MAGIC tbl_location = spark.sql(f"DESCRIBE DETAIL {table_name}").first().location
+-- MAGIC tbl_location = spark.sql(f"DESCRIBE DETAIL managed_table").first().location
 -- MAGIC print(tbl_location)
 -- MAGIC
 -- MAGIC files = dbutils.fs.ls(tbl_location)
@@ -148,7 +149,7 @@ DESCRIBE DETAIL managed_table;
 
 -- COMMAND ----------
 
-DROP TABLE managed_table;
+DROP TABLE IF EXISTS managed_table_in_db_with_default_location;
 
 -- COMMAND ----------
 
@@ -161,7 +162,7 @@ DROP TABLE managed_table;
 -- COMMAND ----------
 
 -- MAGIC %python 
--- MAGIC schema_default_location = spark.sql(f"DESCRIBE SCHEMA {DA.schema_name}_default_location").collect()[3].database_description_value
+-- MAGIC schema_default_location = spark.sql(f"DESCRIBE SCHEMA {DA.schema_name}_custom_location").collect()[3].database_description_value
 -- MAGIC print(schema_default_location)
 -- MAGIC dbutils.fs.ls(schema_default_location)
 
@@ -178,6 +179,20 @@ DROP TABLE managed_table;
 -- COMMAND ----------
 
 USE ${da.schema_name}_default_location;
+
+CREATE OR REPLACE TEMPORARY VIEW temp_delays USING CSV OPTIONS (
+  path = '${da.paths.datasets}/flights/departuredelays.csv',
+  header = "true",
+  mode = "FAILFAST" -- abort file parsing with a RuntimeException if any malformed lines are encountered
+);
+CREATE OR REPLACE TABLE external_table LOCATION '${da.paths.working_dir}/external_table' AS
+  SELECT * FROM temp_delays;
+
+SELECT * FROM external_table; 
+
+-- COMMAND ----------
+
+USE ${da.schema_name}_custom_location;
 
 CREATE OR REPLACE TEMPORARY VIEW temp_delays USING CSV OPTIONS (
   path = '${da.paths.datasets}/flights/departuredelays.csv',
@@ -238,7 +253,7 @@ DROP TABLE external_table;
 
 -- COMMAND ----------
 
-DROP SCHEMA ${da.schema_name}_default_location CASCADE;
+DROP SCHEMA ${da.schema_name}_custom_location CASCADE;
 
 -- COMMAND ----------
 
